@@ -1,0 +1,103 @@
+/* ['C:/Users/shahi/OneDrive/Desktop/New.flr']. */
+
+//breeze[room->{(1,2),(1,4),(2,3),(3,2),(3,4),(4,3)}].
+//stench[room->{(3,1),(3,2),(4,1),(4,2),(4,3)}].
+glitter[room->{(3,2),(4,1)}].
+
+world[width->4, height->4].
+
+pitFree[room->{(1,1)}].
+wumpusFree[room->{(1,1)}].
+
+// Shortcut to put signals
+pit[room->{ (1,3),(3,3) }].
+wumpus[room->{ (4,1),(4,2) }].
+
+%run :-
+	%init,
+	%search.
+
+%search :-
+	\+ %loop,
+
+	?wumpusList = setof{?Room | foundWumpus[room->?Room]},
+	write('Wumpuses were killed at ')@\io, write(?wumpusList)@\io, writeln('.')@\io,
+
+	?goldList = setof{?Gold | (%findSafe(?X,?Y);foundWumpus[room->(?X,?Y)]), glitter[room->(?X,?Y)], ?Gold=(?X,?Y)},
+	write('Golds were found at ')@\io, write(?goldList)@\io, writeln('.')@\io,
+	
+	write('Safe rooms are ')@\io,
+	forall(?X,?Y)^(%findSafe(?X,?Y)~~>write((?X,?Y))@\io),
+	writeln('.')@\io.
+
+
+%loop :-
+	exists(?X,?Y)^(%findSafe(?X,?Y), \+ visited[room->(?X,?Y)], ?XX \is ?X, ?YY \is ?Y),
+	insert{visited[room->(?XX,?YY)]},
+	%searchSurrounding(?XX,?YY),
+	(%canFindWumpus(?_Wump) ~~> \true),
+	%loop.
+	
+
+%searchSurrounding(?X,?Y) :- %findPitFree(?X,?Y), %findWumpusFree(?X,?Y).
+
+
+%findPitFree(?X,?Y) :-
+	(\+ breeze[room->(?X,?Y)])~~>(
+	%adjacentList(?X,?Y,?L),
+	insertall{pitFree[room->(?Z,?W)] | ((?Z,?W) \in ?L)}).
+
+%findWumpusFree(?X,?Y) :-
+	(\+ stench[room->(?X,?Y)])~~>(
+	%adjacentList(?X,?Y,?L),
+	insertall{wumpusFree[room->(?Z,?W)] | (?Z,?W) \in ?L}).
+
+
+%findSafe(?X,?Y) :- pitFree[room->(?X,?Y)], wumpusFree[room->(?X,?Y)].
+
+
+%canFindGold(?Gold) :- %findSafe(?X,?Y), glitter[room->(?X,?Y)], ?Gold=(?X,?Y).
+	
+
+%canFindWumpus(?Wump) :-
+	?SafeList = setof{?Room | %findSafe(?X,?Y), ?Room=(?X,?Y)},
+	exists(?X,?Y)^((?X,?Y) \in ?SafeList ,%canLocateWumpusAround(?X,?Y,?Wump), ?XX \is ?X, ?YY \is ?Y),
+	%searchSurrounding(?XX,?YY),
+	insert{foundWumpus[room->?Wump]}.
+
+
+%canLocateWumpusAround(?X,?Y,?Wump) :-
+	stench[room->(?X,?Y)],
+	%adjacentList(?X,?Y,?L),
+	exists(?Z,?W)^((?Z,?W) \in ?L, \+ wumpusFree[room->(?Z,?W)],
+		\+ exists(?R, ?S)^((?R,?S) \in ?L, \+ wumpusFree[room->(?R,?S)], ?R != ?Z, ?S != ?W),?Wump=(?Z,?W)).
+
+
+//%canLocateWumpusAround(?X,?Y,?Wump) :-
+//	stench[room->(?X,?Y)],
+//	%adjacentList(?X,?Y,?L),
+//	?Count \is countdistinct{?C | (?C=(?Z,?W),(?Z,?W) \in ?L, \+ wumpusFree[room->(?Z,?W)])},
+//	?Count =:= 1,
+//	(?Z,?W) \in ?L,
+//	\+ wumpusFree[room->(?Z,?W)],
+//	?Wump=(?Z,?W).
+
+
+%adjacentList(?X,?Y,?L) :-
+	?Yr \is ?Y+1,
+	?Yl \is ?Y-1,
+	?Xu \is ?X+1,
+	?Xd \is ?X-1,
+	\list[append([[(?X,?Yr),(?X,?Yl),(?Xu,?Y),(?Xd,?Y)]])->?T]@\btp,
+	?L = setof{?Room | ?Room=(?XX,?YY), ?Room \in ?T, ?XX > 0, ?XX =< world.width, ?YY > 0, ?YY =< world.height}.
+
+
+// The following predicate set the signals based on the wumpuses and pits locations
+%init :-
+	?pitList = setof{?Room | pit[room->?Room], ?Room=(?_XX,?_YY)},
+	insertall{breeze[room->(?X,?Y)] | (?_X,?_Y) \in ?pitList, %adjacentList(?_X,?_Y,?Z),((?X,?Y) \in ?Z)},
+	
+	?wumpusList = setof{?Room | wumpus[room->?Room], ?Room=(?_XXX,?_YYY)},
+	insertall{stench[room->(?XX,?YY)] | (?_XX,?_YY) \in ?wumpusList, %adjacentList(?_XX,?_YY,?ZZ),((?XX,?YY) \in ?ZZ)}.
+
+
